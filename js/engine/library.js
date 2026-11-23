@@ -50,8 +50,20 @@ export const daysOfScope = (scope) => {
   return RECENT_DAY_RANGES.includes(n) ? n : null;
 };
 
+// Free review rounds on the review page: today's new words, and the older words you have not seen for the longest time.
+export const OLD_ROUND = 25;
 export function poolFor(state, scope, today = dayKey()) {
   if (scope === 'all') return learnedIds(state);
+  if (scope === 'today') return learnedIds(state).filter((id) => state.progress[id].firstLearnedDay === today);
+  if (scope === 'old') {
+    return learnedIds(state)
+      .filter((id) => (state.progress[id].firstLearnedDay ?? '') < today)
+      .sort((a, b) => {
+        const pa = state.progress[a];
+        const pb = state.progress[b];
+        return (pa.lastReviewedDay ?? pa.firstLearnedDay ?? '').localeCompare(pb.lastReviewedDay ?? pb.firstLearnedDay ?? '') || pa.stage - pb.stage || a.localeCompare(b);
+      });
+  }
   const days = daysOfScope(scope);
   if (days) {
     const from = addDays(today, -(days - 1));

@@ -18,7 +18,7 @@ import {
   topicLessonsOf,
   upcomingLessons,
 } from './engine/lesson.js';
-import { MEMO_MAX, activityByDay, hardWordIds, memoOf, recentLessons, isStarred, markKnownAhead, RECENT_DAY_RANGES, daysOfScope, poolFor, reviewForecast, setMemo, todayMistakeIds, toggleStar, unmarkKnownAhead } from './engine/library.js';
+import { OLD_ROUND, MEMO_MAX, activityByDay, hardWordIds, memoOf, recentLessons, isStarred, markKnownAhead, RECENT_DAY_RANGES, daysOfScope, poolFor, reviewForecast, setMemo, todayMistakeIds, toggleStar, unmarkKnownAhead } from './engine/library.js';
 import { confusablesOf } from '../data/confusables.js';
 import { applyPlacement, placementIds, placementQuestions, placementResult, placementSkipCount, undoPlacement } from './engine/placement.js';
 import { matchPick, matchTiles, matchedSoFar, newMatchGame, newQuiz, dictationAnswer, quizAnswer, quizCurrent, quizNext, quizScore, quizSkip } from './engine/games.js';
@@ -1150,7 +1150,7 @@ function viewPractice(id) {
   const p = practiceProgress(session);
   const back = session.lessonId && state.lessons.some((l) => l.id === session.lessonId) ? `#/lesson/${session.lessonId}` : backHref(session.scope);
   if (session.completedAt) {
-    return emptyState(t('practice.done'), t('practice.doneText', { t: p.total }), `<a class="btn btn-primary" href="${back}">${esc(t(session.lessonId ? 'practice.back' : session.scope?.startsWith('sit-') ? 'sit.back' : 'train.back'))}</a><a class="btn" href="#/">${esc(t('act.dashboard'))}</a>`);
+    return emptyState(t('practice.done'), t('practice.doneText', { t: p.total }), `<a class="btn btn-primary" href="${back}">${esc(t(session.lessonId ? 'practice.back' : session.scope?.startsWith('sit-') ? 'sit.back' : session.scope === 'today' || session.scope === 'old' ? 'practice.backReview' : 'train.back'))}</a><a class="btn" href="#/">${esc(t('act.dashboard'))}</a>`);
   }
   const vocabId = session.queue[0];
   const item = session.items.find((i) => i.vocabId === vocabId);
@@ -2184,15 +2184,22 @@ function viewReview() {
       .map((p) => p.nextDueDay)
       .sort()[0];
     const doneToday = review && review.day === today() && review.completed > 0;
-    const next = upcoming ? ` ${t('review.next', { d: fmtDay(upcoming) })}` : '';
+    const next = upcoming ? ` ${t('review.next', { d: fmtDay(upcoming) })}`.replace(/\.\.$/, '.') : '';
     // Catching up: more words are waiting beyond today's share – one more round on request.
     const waiting = doneToday ? waitingVocabIds(state, today()).length : 0;
-    const onward = todayNextButton(waiting ? 'btn' : 'btn btn-primary');
+    // Review any time: today's new words and the older words you have not seen for the longest time.
+    const todayN = poolFor(state, 'today', today()).length;
+    const oldN = Math.min(poolFor(state, 'old', today()).length, OLD_ROUND);
+    const onward = todayNextButton(waiting || todayN || oldN ? 'btn' : 'btn btn-primary');
     const more = waiting ? `<button class="btn btn-primary" data-action="review-more">${esc(t('review.more', { n: Math.min(REVIEW_ROUND, waiting) }))}</button>` : '';
+    const free = [
+      todayN ? `<button class="btn ${more ? '' : 'btn-primary'}" data-action="start-word-practice" data-id="today">${esc(t('review.todayWords', { n: todayN }))}</button>` : '',
+      oldN ? `<button class="btn ${more || todayN ? '' : 'btn-primary'}" data-action="start-word-practice" data-id="old">${esc(t('review.oldWords', { n: oldN }))}</button>` : '',
+    ].join('');
     return emptyState(
       t(doneToday ? 'review.complete' : 'review.none'),
-      doneToday ? t('review.completeText', { n: review.completed }) + (waiting ? ` ${t('review.waiting', { n: waiting })}` : next) : upcoming ? t('review.noneText') + next : t('review.empty'),
-      `${more}${onward}${mistakesButton()}<a class="btn${more || onward ? '' : ' btn-primary'}" href="#/">${esc(t('act.dashboard'))}</a>`,
+      (doneToday ? t('review.completeText', { n: review.completed }) + (waiting ? ` ${t('review.waiting', { n: waiting })}` : next) : upcoming ? t('review.noneText') + next : t('review.empty')) + (free ? ` ${t('review.freeHint')}` : ''),
+      `${more}${free}${onward}${mistakesButton()}<a class="btn${more || onward || free ? '' : ' btn-primary'}" href="#/">${esc(t('act.dashboard'))}</a>`,
     );
   }
   // A short pause after every round: what is done, what is left, and a free choice to go on or stop.
@@ -2784,6 +2791,7 @@ function scopeName(scope) {
 }
 
 function backHref(scope) {
+  if (scope === 'today' || scope === 'old') return '#/review';
   if (scope?.startsWith('topic-')) return `#/topic/${scope.slice(6)}`;
   if (scope?.startsWith('sit-')) return `#/situation/${scope.slice(4)}`;
   return state.lessons.some((l) => l.id === scope) ? `#/lesson/${scope}` : '#/train';

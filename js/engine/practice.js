@@ -4,7 +4,7 @@
 
 import { dayKey } from './dates.js';
 import { REQUEUE_GAP, directionsFor } from './lesson.js';
-import { hardWordIds, poolFor } from './library.js';
+import { OLD_ROUND, hardWordIds, poolFor } from './library.js';
 import { shuffle, uuid } from './random.js';
 import { applyAnswer, isLearned } from './srs.js';
 import { clone, hasEvent, pushEvent } from './state.js';
@@ -27,13 +27,17 @@ export function practiceWordIds(state, lessonId) {
 // Starting a new practice replaces an unfinished one – practice is optional and never blocks learning.
 // scope: a lesson id, 'all', 'starred' or 'hard'.
 export function startWordPractice(state, scope, now = new Date()) {
-  const pool = poolFor(state, scope);
+  const pool = poolFor(state, scope, dayKey(now));
   if (!pool.length) return state;
   const s = clone(state);
   const id = uuid();
-  // A lesson is practised with all of its words (at most 30); bigger pools are cut to 20 random cards.
+  // A lesson and today's new words are practised with all of their words; the older words are the 25 you have not
+  // seen for the longest time; other pools are cut to 20 random cards.
   const isLessonScope = state.lessons.some((l) => l.id === scope);
-  const ids = shuffle(pool, `${id}:pick`).slice(0, isLessonScope ? pool.length : PRACTICE_MAX);
+  const ids =
+    scope === 'old'
+      ? pool.slice(0, OLD_ROUND)
+      : shuffle(pool, `${id}:pick`).slice(0, isLessonScope || scope === 'today' ? pool.length : PRACTICE_MAX);
   const dirs = directionsFor(ids.length, `${id}:dir`);
   const lessonId = state.lessons.some((l) => l.id === scope) ? scope : null;
   s.practice = {
