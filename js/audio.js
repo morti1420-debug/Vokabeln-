@@ -114,14 +114,34 @@ export function createSpeaker({ synth = globalThis.speechSynthesis, Utterance = 
   };
 }
 
-// A 1-sample silent WAV. Playing it synchronously inside the tap unlocks the audio element on iOS,
-// so the real clip may start after the network request has finished.
+// A short, truly silent WAV in the recordings' own format (22 050 Hz, mono). Playing it synchronously inside the tap
+// unlocks the audio element on iOS, so the real clip may start after the network request has finished. It must match
+// the recordings: a different sample rate (and a clip of a single sample) made the iPhone switch its audio output
+// and give a short, quiet "ding" before every word.
+export const SILENT_RATE = 22050;
+export function silentWav(ms = 120, rate = SILENT_RATE) {
+  const samples = Math.round((rate * ms) / 1000);
+  const data = samples * 2;
+  const buf = new ArrayBuffer(44 + data);
+  const v = new DataView(buf);
+  const str = (o, t) => [...t].forEach((c, i) => v.setUint8(o + i, c.charCodeAt(0)));
+  str(0, 'RIFF');
+  v.setUint32(4, 36 + data, true);
+  str(8, 'WAVE');
+  str(12, 'fmt ');
+  v.setUint32(16, 16, true);
+  v.setUint16(20, 1, true); // PCM
+  v.setUint16(22, 1, true); // mono
+  v.setUint32(24, rate, true);
+  v.setUint32(28, rate * 2, true);
+  v.setUint16(32, 2, true);
+  v.setUint16(34, 16, true);
+  str(36, 'data');
+  v.setUint32(40, data, true);
+  return new Uint8Array(buf); // the samples stay 0: silence
+}
 function silentWavUrl() {
-  const bytes = new Uint8Array([
-    82, 73, 70, 70, 38, 0, 0, 0, 87, 65, 86, 69, 102, 109, 116, 32, 16, 0, 0, 0, 1, 0, 1, 0, 68, 172, 0, 0, 136, 88, 1, 0, 2, 0, 16, 0,
-    100, 97, 116, 97, 2, 0, 0, 0, 0, 0,
-  ]);
-  return URL.createObjectURL(new Blob([bytes], { type: 'audio/wav' }));
+  return URL.createObjectURL(new Blob([silentWav()], { type: 'audio/wav' }));
 }
 
 // Plays the natural recorded voice (or ElevenLabs with an own key); the device voice only when chosen on purpose.

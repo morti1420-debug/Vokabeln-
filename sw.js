@@ -1,5 +1,5 @@
 // App-shell cache so the app opens and works fully offline. Bump VERSION on every release.
-const VERSION = 'ev-v86';
+const VERSION = 'ev-v87';
 const ASSETS = [
   './',
   './index.html',
