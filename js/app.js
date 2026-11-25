@@ -278,6 +278,22 @@ function accountChip() {
   return `<a class="account-chip" href="#/settings" title="${esc(t('acc.signedIn', { e: a.email }))}" aria-label="${esc(t('acc.signedIn', { e: a.email }))}">${avatar(a)}<span class="account-email">${esc(a.email.split('@')[0])}<span class="account-domain">@${esc(a.email.split('@').slice(1).join('@'))}</span></span></a>`;
 }
 
+// "Passwort ändern": a new password of your own, typed twice.
+function passwordForm() {
+  const pw = ui.password ?? {};
+  const msg = pw.result ? `<p class="${pw.result === 'ok' ? 'muted' : 'notice'} small" role="${pw.result === 'ok' ? 'status' : 'alert'}" style="margin-top:8px">${esc(t(`acc.pw.${pw.result}`))}</p>` : '';
+  return `<details class="account-more" ${pw.open ? 'open' : ''}><summary>${esc(t('acc.pw.title'))}</summary>
+      <form class="account-form" data-form="password" autocomplete="off">
+        <label class="sr-only" for="pw-new">${esc(t('acc.pw.new'))}</label>
+        <input class="input" id="pw-new" name="password" type="password" autocomplete="new-password" minlength="8" placeholder="${esc(t('acc.pw.new'))}" required />
+        <label class="sr-only" for="pw-again">${esc(t('acc.pw.again'))}</label>
+        <input class="input" id="pw-again" name="again" type="password" autocomplete="new-password" minlength="8" placeholder="${esc(t('acc.pw.again'))}" required />
+        <div class="hero-actions"><button class="btn btn-primary" type="submit" ${pw.busy ? 'disabled' : ''}>${esc(t('acc.pw.save'))}</button></div>
+      </form>
+      ${msg}
+    </details>`;
+}
+
 function accountSection() {
   if (!sync.enabled) return '';
   const a = sync.account();
@@ -301,6 +317,7 @@ function accountSection() {
         <button class="btn btn-sm" data-action="sync-now" ${st.busy ? 'disabled' : ''}>${esc(t('acc.syncNow'))}</button>
         <button class="btn btn-sm btn-ghost" data-action="sign-out">${esc(t('acc.signOut'))}</button>
       </div>
+      ${a.provider === 'google' ? '' : passwordForm()}
     </section>`;
   }
   return `
@@ -5020,6 +5037,27 @@ root.addEventListener('submit', (event) => {
       return;
     }
     flip();
+    return;
+  }
+  const passwordFormEl = event.target.closest('[data-form="password"]');
+  if (passwordFormEl) {
+    event.preventDefault();
+    const password = passwordFormEl.querySelector('#pw-new').value;
+    const again = passwordFormEl.querySelector('#pw-again').value;
+    ui.password = { open: true };
+    if (password.length < 8) ui.password.result = 'short';
+    else if (password !== again) ui.password.result = 'mismatch';
+    if (ui.password.result) {
+      render();
+      return;
+    }
+    ui.password.busy = true;
+    render();
+    sync
+      .changePassword(password)
+      .then(() => (ui.password = { open: true, result: 'ok' }))
+      .catch((e) => (ui.password = { open: true, result: e?.reason === 'weak' ? 'short' : e?.reason === 'network' ? 'network' : 'failed' }))
+      .finally(() => render());
     return;
   }
   const accountForm = event.target.closest('[data-form="account"]');

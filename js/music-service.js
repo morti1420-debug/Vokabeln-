@@ -33,15 +33,35 @@ export async function searchCatalog(term, { fetchImpl = globalThis.fetch?.bind(g
       if (Array.isArray(data?.results)) return data.results;
     } catch {}
   }
-  let data;
-  try {
-    const res = await fetchImpl(`${CATALOG}?${new URLSearchParams({ term: q, media: 'music', entity: 'song', limit: String(limit), country })}`);
-    if (!res.ok) throw new Error(String(res.status));
-    data = await res.json();
-  } catch {
-    throw new MusicError('network');
-  }
-  return (data?.results ?? [])
+  // Directly from the catalogues of several countries (a song can be out in Hong Kong only), the best match first.
+  const countries = [country, 'US', 'HK', 'TW', 'GB'].filter((c, i, all) => all.indexOf(c) === i);
+  const lists = await Promise.all(
+    countries.map(async (c) => {
+      try {
+        const res = await fetchImpl(`${CATALOG}?${new URLSearchParams({ term: q, media: 'music', entity: 'song', limit: String(limit), country: c })}`);
+        if (!res.ok) return null;
+        return (await res.json())?.results ?? [];
+      } catch {
+        return null;
+      }
+    }),
+  );
+  if (lists.every((l) => l === null)) throw new MusicError('network');
+  const seen = new Set();
+  const joined = lists.flat().filter((r) => {
+    const key = r?.trackId ?? `${r?.trackName}|${r?.artistName}`;
+    if (!r || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+  const words = (s) => String(s ?? '').toLowerCase().normalize('NFKD').replace(/[^\p{L}\p{N}\s]/gu, ' ').split(/\s+/).filter(Boolean);
+  const want = words(q);
+  const score = (r) => {
+    const have = new Set(words(`${r.trackName} ${r.artistName} ${r.collectionName}`));
+    return want.filter((w) => have.has(w)).length;
+  };
+  const data = { results: joined.map((r, i) => ({ r, i, s: score(r) })).sort((a, b) => b.s - a.s || a.i - b.i).map((x) => x.r).slice(0, 15) };
+  return (data.results ?? [])
     .filter((r) => r.trackName && r.artistName)
     .map((r) => ({
       title: r.trackName,

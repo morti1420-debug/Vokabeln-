@@ -144,6 +144,13 @@ export function createSync({ fetchImpl = globalThis.fetch?.bind(globalThis), sto
       await call('/functions/v1/ev-signup', { method: 'POST', body: { email: String(email).trim(), password } });
       return signIn(email, password);
     },
+    // Your own new password (signed in). The account stays signed in on every device.
+    async changePassword(password) {
+      if (String(password ?? '').length < 8) throw new SyncError('weak');
+      const s = await token();
+      await call('/auth/v1/user', { method: 'PUT', token: s.accessToken, body: { password: String(password) } });
+      return true;
+    },
     async signOut() {
       const s = session();
       writeJson(storage, SESSION_KEY, null);
