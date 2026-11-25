@@ -1,5 +1,5 @@
 // App-shell cache so the app opens and works fully offline. Bump VERSION on every release.
-const VERSION = 'ev-v88';
+const VERSION = 'ev-v89';
 const ASSETS = [
   './',
   './index.html',
@@ -20,6 +20,7 @@ const ASSETS = [
   './data/confusables.js',
   './data/stories.js',
   './data/songs.js',
+  './data/irregular-verbs.js',
   './js/engine/grammar.js',
   './js/engine/dialogs.js',
   './js/app.js',
@@ -43,6 +44,7 @@ const ASSETS = [
   './js/engine/library.js',
   './js/engine/merge.js',
   './js/engine/music.js',
+  './js/engine/verbs.js',
   './js/engine/load.js',
   './js/engine/practice.js',
   './js/engine/placement.js',

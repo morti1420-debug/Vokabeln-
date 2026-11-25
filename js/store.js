@@ -117,6 +117,7 @@ export function validateState(s, knownVocabIds = null) {
   if ('grammar' in s && (!isObject(s.grammar) || Object.values(s.grammar).some((g) => !isObject(g) || typeof g.best !== 'number'))) return { ok: false, error: 'grammar ungültig' };
   if ('dialogs' in s && (!isObject(s.dialogs) || Object.values(s.dialogs).some((d) => !isObject(d) || typeof d.runs !== 'number'))) return { ok: false, error: 'dialogs ungültig' };
   if ('songs' in s && (!Array.isArray(s.songs) || s.songs.some((x) => !isObject(x) || typeof x.id !== 'string' || (!x.deleted && (!Array.isArray(x.words) || !Array.isArray(x.lines)))))) return { ok: false, error: 'songs ungültig' };
+  if ('verbs' in s && (!isObject(s.verbs) || Object.values(s.verbs).some((v) => !isObject(v) || typeof v.right !== 'number'))) return { ok: false, error: 'verbs ungültig' };
   if ('activity' in s && (!isObject(s.activity) || Object.values(s.activity).some((n) => typeof n !== 'number'))) return { ok: false, error: 'activity ungültig' };
   for (const [id, p] of Object.entries(s.progress)) {
     if (!isObject(p) || p.vocabId !== id || typeof p.stage !== 'number') return { ok: false, error: `Fortschritt für ${id} ungültig` };

@@ -6,6 +6,7 @@
 // - Starred words are joined; settings come from the device that was used last.
 
 import { mergeSongs } from './music.js';
+import { mergeVerbs } from './verbs.js';
 
 import { mergeDialogs, mergeStories } from './dialogs.js';
 
@@ -103,6 +104,7 @@ export function mergeStates(a, b) {
     ...(a.dialogs || b.dialogs ? { dialogs: mergeDialogs(a.dialogs, b.dialogs) } : {}),
     ...(a.stories || b.stories ? { stories: mergeStories(a.stories, b.stories) } : {}),
     ...(a.songs || b.songs ? { songs: mergeSongs(a.songs, b.songs) } : {}),
+    ...(a.verbs || b.verbs ? { verbs: mergeVerbs(a.verbs, b.verbs) } : {}),
     ...(a.topicLessons || b.topicLessons ? { topicLessons: mergeTopicLessons(a.topicLessons, b.topicLessons) } : {}),
   };
   // At most one open test and one open sentence session (the newest), like on a single device.

@@ -75,8 +75,10 @@ import { shuffle } from './engine/random.js';
 import { exportData, hasLearningData, loadState, parseImport, pruneBackup, saveState, storageAvailable } from './store.js';
 import { ELEVEN_VOICES, createElevenLabs, createSharedTts } from './tts.js';
 import { createSync } from './sync.js';
+import { IRREGULAR_VERBS, verbById } from '../data/irregular-verbs.js';
+import { VERB_ROUND, checkForm, isSure, recordVerb, verbRound, verbStatsOf } from './engine/verbs.js';
 import { PRESET_SONGS, songLineAudioId, songWordAudioId } from '../data/songs.js';
-import { addSong, analyzeSong, ensurePresetSongs, saveSongRun, savedSongRun, setSongContent, lemmaCandidates, lineTokens, lyricLines, openSongLesson, recordSongCards, recordSongQuiz, removeSong, removeSongWord, setSongMeaning, songById, songLearnedCount, songLessonCandidates, songQuiz, songStats, songsOf, startSongLesson, updateSongMeta } from './engine/music.js';
+import { textLines, textsOf, addSong, analyzeSong, ensurePresetSongs, saveSongRun, savedSongRun, setSongContent, lemmaCandidates, lineTokens, lyricLines, openSongLesson, recordSongCards, recordSongQuiz, removeSong, removeSongWord, setSongMeaning, songById, songLearnedCount, songLessonCandidates, songQuiz, songStats, songsOf, startSongLesson, updateSongMeta } from './engine/music.js';
 import { pictureToCover, searchCatalog, translateTexts } from './music-service.js';
 import { REMINDER_HOURS, createReminder } from './reminder.js';
 
@@ -515,6 +517,8 @@ const NAV_GROUP = {
   stories: 'train',
   story: 'train',
   music: 'train',
+  texts: 'train',
+  verbs: 'train',
   'song-add': 'train',
   song: 'train',
   'song-cards': 'train',
@@ -1437,7 +1441,7 @@ function songCover(song, cls = '') {
 
 function viewMusic() {
   if (!hasMusic()) return emptyState(t('msg.notFound'), t('msg.notFoundText'), `<a class="btn btn-primary" href="#/train">${esc(t('nav.train'))}</a>`);
-  const songs = songsOf(state);
+  const songs = songsOf(state).filter((x) => x.kind !== 'text');
   const cards = [...songs]
     .reverse()
     .map((song) => {
@@ -1663,9 +1667,10 @@ function viewSong(id) {
     : learnable
       ? `<button class="btn" data-action="song-srs" data-id="${id}">${esc(t('music.srsStart', { n: learnable }))}</button>`
       : '';
+  const isText = song.kind === 'text';
   return `
-    <p class="eyebrow"><a href="#/music" class="back-link">${esc(t('music.title'))}</a></p>
-    <section class="song-hero">
+    <p class="eyebrow">${isText ? `<a href="#/texts" class="back-link">${esc(t('texts.title'))}</a>` : `<a href="#/music" class="back-link">${esc(t('music.title'))}</a>`}</p>
+    ${isText ? `<h1 class="page-title" tabindex="-1">${esc(song.title)}</h1>` : `<section class="song-hero">
       ${songCover(song, 'is-large')}
       <div class="song-hero-text">
         <h1 class="page-title" tabindex="-1">${esc(song.title)}</h1>
@@ -1674,7 +1679,7 @@ function viewSong(id) {
         ${song.preview ? `<audio class="song-preview" controls preload="none" src="${esc(song.preview)}" aria-label="${esc(t('music.preview'))}"></audio>` : ''}
         <div class="hero-actions">${links}</div>
       </div>
-    </section>
+    </section>`}
     ${ui.songNotice === 'translate' ? `<p class="notice" role="status">${esc(t('music.translateFailed'))}</p>` : ''}
     ${song.themed ? `<p class="notice" role="note">${esc(t('music.themedNote'))}</p>` : ''}
     ${song.words.length ? '' : songFillForm(song)}
@@ -1682,18 +1687,18 @@ function viewSong(id) {
       <h2 class="section-title">${esc(t('music.learnTitle'))}</h2>
       <div class="song-modes">
         ${songModeButton(song, 'words', '🃏', t('music.modeWords', { n: song.words.length }), t('music.modeWordsSub', { d: st.words, t: st.wordTotal }))}
-        ${song.lines.length ? songModeButton(song, 'lines', '🎤', t('music.modeLines', { n: song.lines.length }), t('music.modeLinesSub', { d: st.lines, t: st.lineTotal })) : ''}
+        ${song.lines.length ? songModeButton(song, 'lines', song.kind === 'text' ? '💬' : '🎤', t(song.kind === 'text' ? 'texts.modeLines' : 'music.modeLines', { n: song.lines.length }), t('music.modeLinesSub', { d: st.lines, t: st.lineTotal })) : ''}
         ${songQuiz(song).length >= 3 ? songModeButton(song, 'quiz', '🧩', t('music.modeQuiz'), song.quizBest ? t('music.quizBest', { p: song.quizBest }) : t('music.modeQuizSub')) : ''}
       </div>
-      ${inVocab ? `<p class="muted small field-note">${esc(t(song.themed ? 'music.srsNoteThemed' : 'music.srsNote', { n: inVocab, l: learned }))}</p><div class="hero-actions">${learnBtn}</div>` : ''}
+      ${inVocab ? `<p class="muted small field-note">${esc(t(song.kind === 'text' ? 'texts.srsNote' : song.themed ? 'music.srsNoteThemed' : 'music.srsNote', { n: inVocab, l: learned }))}</p><div class="hero-actions">${learnBtn}</div>` : ''}
     </section>
     <section class="section card">
-      <h2 class="section-title">${esc(t(song.themed ? 'music.wordsTitleThemed' : 'music.wordsTitle', { n: song.words.length }))}</h2>
+      <h2 class="section-title">${esc(t(song.kind === 'text' ? 'texts.wordsTitle' : song.themed ? 'music.wordsTitleThemed' : 'music.wordsTitle', { n: song.words.length }))}</h2>
       <ul class="list song-words">${wordRows}</ul>
     </section>` : ''}
-    ${song.lines.length ? `<section class="section card"><h2 class="section-title">${esc(t(song.themed ? 'music.linesTitleThemed' : 'music.linesTitle', { n: song.lines.length }))}</h2><ol class="story-lines">${lineRows}</ol></section>` : ''}
+    ${song.lines.length ? `<section class="section card"><h2 class="section-title">${esc(t(song.kind === 'text' ? 'texts.linesTitle' : song.themed ? 'music.linesTitleThemed' : 'music.linesTitle', { n: song.lines.length }))}</h2><ol class="story-lines">${lineRows}</ol></section>` : ''}
     ${song.lyrics ? `<details class="section card song-lyrics">
-      <summary>${esc(t('music.lyrics'))}</summary>
+      <summary>${esc(t(isText ? 'texts.text' : 'music.lyrics'))}</summary>
       <pre class="song-lyrics-text" lang="en">${esc(song.lyrics)}</pre>
     </details>` : ''}
     <section class="section song-manage">
@@ -1795,7 +1800,7 @@ function viewSongCards(id) {
         .filter(Boolean)
         .map((w) => `<strong lang="${TL}">${esc(w.en)}</strong> = <span lang="${NL}">${esc(w.de || '–')}</span>`)
         .join(' · ');
-  const label = t(isWord ? 'music.runWords' : 'music.runLines');
+  const label = t(isWord ? (song.kind === 'text' ? 'texts.runWords' : 'music.runWords') : song.kind === 'text' ? 'texts.runLines' : 'music.runLines');
   const textCls = isWord ? '' : ' is-sentence';
   // Listening like on every card: vocabulary words and the prepared songs' words and sentences in the recorded voice;
   // the words and lines of songs you added yourself are read out by the phone's voice.
@@ -1939,6 +1944,159 @@ function viewSongLearn(id) {
     kind: 'song',
     pauseHref: `#/song/${id}`,
   });
+}
+
+/* ---------------- vocabulary from any text ---------------- */
+
+// Paste any English text – a message, a caption, an article – and get cards for the words you do not know yet.
+function viewTexts() {
+  if (!hasMusic()) return emptyState(t('msg.notFound'), t('msg.notFoundText'), `<a class="btn btn-primary" href="#/train">${esc(t('nav.train'))}</a>`);
+  const texts = [...textsOf(state)].reverse();
+  const f = ui.textAdd ?? {};
+  const list = texts
+    .map((x) => {
+      const st = songStats(x);
+      return `<a class="card song-card" href="#/song/${x.id}">
+        <span class="song-cover text-cover" aria-hidden="true"><span class="song-cover-initials">📝</span></span>
+        <span class="song-card-body">
+          <span class="song-card-title">${esc(x.title)}</span>
+          <span class="muted small">${esc(fmtDay(x.addedDay))}</span>
+          <span class="chips"><span class="chip">${esc(t('music.wordsChip', { n: st.wordTotal }))}</span><span class="chip">${esc(t('music.knownChip', { d: st.words, t: st.wordTotal }))}</span></span>
+        </span>
+      </a>`;
+    })
+    .join('');
+  return `
+    <p class="eyebrow"><a href="#/train" class="back-link">${esc(t('nav.train'))}</a></p>
+    <h1 class="page-title" tabindex="-1">${esc(t('texts.title'))}</h1>
+    <p class="lead">${esc(t('texts.lead'))}</p>
+    <section class="section card">
+      <form data-form="text-create" autocomplete="off">
+        <div class="field"><label for="text-title">${esc(t('texts.titleLabel'))}</label>
+          <input id="text-title" class="input" maxlength="80" placeholder="${esc(t('texts.titlePlaceholder'))}" value="${esc(f.title ?? '')}"></div>
+        <label class="sr-only" for="text-body">${esc(t('texts.textLabel'))}</label>
+        <textarea id="text-body" class="input song-lyrics-input" rows="8" lang="en" spellcheck="false" placeholder="${esc(t('texts.placeholder'))}">${esc(f.text ?? '')}</textarea>
+        ${f.error ? `<p class="notice" role="alert" style="margin-top:10px">${esc(t(`texts.err.${f.error}`))}</p>` : ''}
+        <div class="hero-actions"><button class="btn btn-primary" type="submit" ${f.busy ? 'disabled' : ''}>${esc(t(f.busy ? 'music.working' : 'music.create'))}</button></div>
+        <p class="muted small field-note">${esc(t('texts.privacy'))}</p>
+      </form>
+    </section>
+    ${list ? `<div class="section song-list">${list}</div>` : ''}`;
+}
+
+async function createText(title, text) {
+  ui.textAdd = { title, text };
+  const lines = textLines(text);
+  const learned = new Set(Object.values(state.progress).filter(isLearned).map((p) => p.vocabId));
+  const analysis = analyzeSong(lines, VOCABULARY, { skip: learned });
+  if (analysis.words.length < 3) {
+    ui.textAdd.error = text.trim().split(/\s+/).length < 15 ? 'short' : 'known';
+    render();
+    return;
+  }
+  ui.textAdd.busy = true;
+  render();
+  const { words, lines: important } = await songCards(analysis);
+  const name = title.trim() || `${text.trim().split(/\s+/).slice(0, 6).join(' ')} …`;
+  const { state: next, id } = addSong(state, { meta: { title: name, artist: '', kind: 'text' }, lyrics: lines, words, lines: important }, now());
+  ui.textAdd = null;
+  commit(next);
+  go(`song/${id}`);
+}
+
+/* ---------------- irregular verbs ---------------- */
+
+const hasVerbs = () => course.id === 'de-en';
+
+function viewVerbs() {
+  if (!hasVerbs()) return emptyState(t('msg.notFound'), t('msg.notFoundText'), `<a class="btn btn-primary" href="#/train">${esc(t('nav.train'))}</a>`);
+  const run = ui.verbRun;
+  if (run && run.queue.length) return verbCard(run);
+  const stats = verbStatsOf(state);
+  const sure = IRREGULAR_VERBS.filter((v) => isSure(stats[v.id])).length;
+  const done = run && !run.queue.length ? run : null;
+  const rows = IRREGULAR_VERBS.map((v) => {
+    const s = stats[v.id];
+    const mark = isSure(s) ? `<span class="pill good">${esc(t('verbs.sure'))}</span>` : s ? `<span class="pill">${esc(t('verbs.practising'))}</span>` : '';
+    return `<li class="verb-row"><span class="verb-forms" lang="en"><strong>${esc(v.base)}</strong> – ${esc(v.past.join(' / '))} – ${esc(v.participle.join(' / '))}</span><span class="verb-de" lang="de">${esc(v.de)}</span>${mark}</li>`;
+  }).join('');
+  const result = done
+    ? `<section class="section card" role="status"><h2 class="section-title">${esc(t('verbs.roundDone'))}</h2><p class="muted">${esc(t('verbs.roundScore', { k: Object.values(done.results).filter(Boolean).length, t: done.total }))}</p></section>`
+    : '';
+  return `
+    <p class="eyebrow"><a href="#/train" class="back-link">${esc(t('nav.train'))}</a></p>
+    <h1 class="page-title" tabindex="-1">${esc(t('verbs.title'))}</h1>
+    <p class="lead">${esc(t('verbs.lead'))}</p>
+    <p class="muted small" style="margin-top:4px">${esc(t('verbs.count', { s: sure, t: IRREGULAR_VERBS.length }))}</p>
+    ${result}
+    <div class="hero-actions"><button class="btn btn-primary" data-action="verb-start">${esc(t(done ? 'verbs.again' : 'verbs.start', { n: VERB_ROUND }))}</button></div>
+    <section class="section card"><h2 class="section-title">${esc(t('verbs.all', { n: IRREGULAR_VERBS.length }))}</h2><ul class="list verb-list">${rows}</ul></section>`;
+}
+
+function verbCard(run) {
+  const v = verbById(run.queue[0]);
+  const a = run.answer;
+  const field = (name, label, given, ok, accepted) => `
+      <label class="verb-field">
+        <span class="muted small">${esc(label)}</span>
+        <input class="input${a ? (ok ? ' is-right' : ' is-wrong') : ''}" id="verb-${name}" name="${name}" lang="en" autocapitalize="none" autocorrect="off" spellcheck="false" autocomplete="off" enterkeyhint="${name === 'past' ? 'next' : 'done'}" value="${esc(given ?? '')}" ${a ? 'readonly' : ''}>
+        ${a && !ok ? `<span class="verb-solution">${icon('cross', 14)} ${esc(t('verbs.right'))}: <strong lang="en">${esc(accepted.join(' / '))}</strong></span>` : a ? `<span class="verb-solution is-ok">${icon('check', 14)} ${esc(t('verbs.correct'))}</span>` : ''}
+      </label>`;
+  const done = Object.keys(run.results).length;
+  return `
+    <div class="study verb-study">
+      <div class="progress-head"><span>${esc(t('verbs.label'))} ${pad(Math.min(done + 1, run.total))} / ${pad(run.total)}</span><a class="btn btn-ghost btn-sm" href="#/verbs" data-action="verb-stop">${esc(t('act.pause'))}</a></div>
+      <div class="bar" role="progressbar" aria-label="${esc(t('card.progress'))}" aria-valuemin="0" aria-valuemax="${run.total}" aria-valuenow="${done}"><span style="width:${(done / run.total) * 100}%"></span></div>
+      <section class="card section verb-card">
+        <h1 class="sr-only" tabindex="-1">${esc(t('verbs.title'))}</h1>
+        <p class="verb-de-big" lang="de">${esc(v.de)}</p>
+        <p class="verb-base" lang="en">${esc(v.base)}</p>
+        <form class="verb-form" data-form="verb" autocomplete="off">
+          ${field('past', t('verbs.past'), a?.past, a?.okPast, v.past)}
+          ${field('participle', t('verbs.participle'), a?.participle, a?.okPart, v.participle)}
+          <div class="hero-actions">${a ? `<button class="btn btn-primary" type="button" data-action="verb-next" id="verb-next">${esc(t('verbs.next'))}</button>` : `<button class="btn btn-primary" type="submit">${esc(t('verbs.check'))}</button><button class="btn" type="button" data-action="verb-reveal">${esc(t('verbs.dontKnow'))}</button>`}</div>
+        </form>
+        ${a ? `<p class="verb-line" lang="en">${esc(v.base)} – ${esc(v.past.join(' / '))} – ${esc(v.participle.join(' / '))}</p>` : ''}
+      </section>
+    </div>`;
+}
+
+function startVerbRound() {
+  const queue = verbRound(IRREGULAR_VERBS, state);
+  ui.verbRun = { queue, total: queue.length, results: {}, answer: null, again: [] };
+  render();
+  root.querySelector('#verb-past')?.focus({ preventScroll: true });
+}
+
+// Checks the typed forms; the first answer of a verb in the round is the one that is saved.
+function checkVerb(past, participle) {
+  const run = ui.verbRun;
+  if (!run || !run.queue.length || run.answer) return;
+  const v = verbById(run.queue[0]);
+  const okPast = checkForm(past, v.past);
+  const okPart = checkForm(participle, v.participle);
+  run.answer = { past, participle, okPast, okPart };
+  const right = okPast && okPart;
+  if (!(v.id in run.results)) {
+    run.results[v.id] = right;
+    commit(recordVerb(state, v.id, right, today()));
+  } else render();
+  root.querySelector('#verb-next')?.focus({ preventScroll: true });
+}
+
+function nextVerb() {
+  const run = ui.verbRun;
+  if (!run?.answer) return;
+  const id = run.queue.shift();
+  const right = run.answer.okPast && run.answer.okPart;
+  // Wrong: once more, three verbs later.
+  if (!right && !run.again.includes(id)) {
+    run.again.push(id);
+    run.queue.splice(Math.min(3, run.queue.length), 0, id);
+  }
+  run.answer = null;
+  render();
+  root.querySelector('#verb-past')?.focus({ preventScroll: true });
 }
 
 /* ---------------- flashcards ---------------- */
@@ -2836,6 +2994,8 @@ function moreAreas() {
       <h2 class="section-title" id="more-title">${esc(t('more.title'))}</h2>
       <div class="area-grid">
         ${hasMusic() ? tile('#/music', '🎵', t('music.title'), t('more.music')) : ''}
+        ${hasMusic() ? tile('#/texts', '📝', t('texts.title'), t('more.texts')) : ''}
+        ${hasVerbs() ? tile('#/verbs', '🔁', t('verbs.title'), t('more.verbs')) : ''}
         ${tile('#/tests', '✅', t('nav.tests'), t('more.tests'))}
         ${tile('#/topics', '🗂️', t('nav.topics'), t('more.topics'))}
         ${hasSituations() ? tile('#/topics', '💬', t('sit.title'), t('more.situations')) : ''}
@@ -3941,6 +4101,8 @@ const VIEWS = {
   stories: viewStories,
   story: viewStory,
   music: viewMusic,
+  texts: viewTexts,
+  verbs: viewVerbs,
   'song-add': viewSongAdd,
   song: viewSong,
   'song-cards': viewSongCards,
@@ -4501,6 +4663,19 @@ root.addEventListener('click', (event) => {
       render();
       break;
     }
+    case 'verb-start':
+      startVerbRound();
+      break;
+    case 'verb-reveal':
+      checkVerb('', '');
+      break;
+    case 'verb-next':
+      nextVerb();
+      break;
+    case 'verb-stop':
+      ui.verbRun = null;
+      render();
+      break;
     case 'song-run':
       startSongRun(id, el.dataset.mode);
       break;
@@ -4938,6 +5113,25 @@ root.addEventListener('click', (event) => {
 });
 
 root.addEventListener('submit', (event) => {
+  const textForm = event.target.closest('[data-form="text-create"]');
+  if (textForm) {
+    event.preventDefault();
+    if (ui.textAdd?.busy) return;
+    const title = textForm.querySelector('#text-title').value;
+    const text = textForm.querySelector('#text-body').value;
+    createText(title, text).catch(() => {
+      ui.textAdd = { title, text, error: 'failed' };
+      render();
+    });
+    return;
+  }
+  const verbForm = event.target.closest('[data-form="verb"]');
+  if (verbForm) {
+    event.preventDefault();
+    if (ui.verbRun?.answer) nextVerb();
+    else checkVerb(verbForm.querySelector('#verb-past').value, verbForm.querySelector('#verb-participle').value);
+    return;
+  }
   const songSearch = event.target.closest('[data-form="song-search"]');
   if (songSearch) {
     event.preventDefault();
@@ -5129,6 +5323,10 @@ root.addEventListener('submit', (event) => {
 root.addEventListener('input', (event) => {
   if (event.target.dataset.songField) {
     songAddState()[event.target.dataset.songField] = event.target.value;
+    return;
+  }
+  if (event.target.id === 'text-title' || event.target.id === 'text-body') {
+    ui.textAdd = { ...(ui.textAdd ?? {}), [event.target.id === 'text-title' ? 'title' : 'text']: event.target.value, error: null };
     return;
   }
   if (event.target.id === 'song-lyrics') {

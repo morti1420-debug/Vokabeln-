@@ -4157,3 +4157,23 @@ body.theme-beige .memory-back {
   justify-self: end;
   font-size: 14px;
 }
+
+/* ---------------- irregular verbs ---------------- */
+.verb-list { margin: 0; }
+.verb-row { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; }
+.verb-forms { flex: 1 1 100%; }
+.verb-de { color: var(--text-2); font-size: 14px; }
+.verb-card { text-align: center; }
+.verb-de-big { font-size: 18px; color: var(--text-2); margin: 0; }
+.verb-base { font-size: 36px; font-weight: 800; margin: 4px 0 18px; color: var(--gold, var(--accent-strong)); }
+.verb-form { display: grid; gap: 14px; text-align: left; }
+.verb-field { display: grid; gap: 6px; }
+.verb-field .input { font-size: 20px; }
+.verb-field .input.is-right { border-color: #3f9b6b; background: rgba(63, 155, 107, 0.12); }
+.verb-field .input.is-wrong { border-color: #c0524f; background: rgba(192, 82, 79, 0.12); }
+.verb-solution { font-size: 15px; color: var(--bad, #f0a59c); }
+.verb-solution.is-ok { color: var(--good, #8fd6a2); }
+.verb-line { margin: 16px 0 0; font-size: 18px; }
+
+.text-cover { background: var(--surface-2); }
+.text-cover .song-cover-initials { font-size: 28px; }

@@ -175,7 +175,18 @@ const WORD_BLOCK = new Set(['hong', 'kong']);
 
 // The analysis of a song: its important words and lines.
 // Returns { words: [{ key, en, vocabId, count }], lines: [{ en, keys }], total } – total: all different words found.
-export function analyzeSong(lyrics, vocabulary, { index = vocabIndex(vocabulary), max = SONG_WORDS_MAX } = {}) {
+// Any English text (a message, a caption, an article) as lines: one sentence per line.
+export function textLines(text) {
+  return normalizeLyrics(text)
+    .replace(/([.!?…])["')\]]*\s+/g, '$1\n')
+    .split('\n')
+    .map((l) => l.trim())
+    .filter(Boolean)
+    .join('\n');
+}
+
+// skip: vocabulary ids to leave out (for texts: the words you have learned already).
+export function analyzeSong(lyrics, vocabulary, { index = vocabIndex(vocabulary), max = SONG_WORDS_MAX, skip = null } = {}) {
   const lines = lyricLines(lyrics);
   const found = new Map(); // key -> { key, en, vocabId, count, first, phrase }
   const proper = new Map(); // surface word -> capitalised every time (names, places)
@@ -216,7 +227,7 @@ export function analyzeSong(lyrics, vocabulary, { index = vocabIndex(vocabulary)
     }
     lineKeys.push(keys);
   });
-  const all = [...found.values()].filter((x) => x.vocabId || !proper.get(x.surface));
+  const all = [...found.values()].filter((x) => (x.vocabId || !proper.get(x.surface)) && !(x.vocabId && skip?.has(x.vocabId)));
   const vocabById = new Map(vocabulary.map((v) => [v.id, v]));
   const rank = (x) => (x.vocabId ? vocabById.get(x.vocabId)?.frequencyRank ?? 9999 : 9999);
   const words = all
@@ -247,6 +258,7 @@ export function analyzeSong(lyrics, vocabulary, { index = vocabIndex(vocabulary)
 /* ---------------- songs in the learning state ---------------- */
 
 export const songsOf = (state) => (state.songs ?? []).filter((s) => !s.deleted);
+export const textsOf = (state) => songsOf(state).filter((s) => s.kind === 'text');
 export const songById = (state, id) => songsOf(state).find((s) => s.id === id) ?? null;
 
 const clean = (v, n) => String(v ?? '').trim().slice(0, n);
@@ -260,6 +272,7 @@ export function addSong(state, { meta, lyrics, words, lines }, now = new Date())
     ...(s.songs ?? []),
     {
       id,
+      ...(meta.kind === 'text' ? { kind: 'text' } : {}),
       title: clean(meta.title, 120),
       artist: clean(meta.artist, 120),
       album: clean(meta.album, 120),
